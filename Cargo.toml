@@ -1,0 +1,33 @@
+[package]
+name = "actix-web-query-method-middleware"
+version = "1.0.0"
+edition = "2021"
+
+[features]
+default = ["logging_tracing"]
+# The middleware will use the `tracing` library to log messages.
+logging_tracing = ["tracing"]
+# The middleware will use the `log` library to log messages.
+logging_log = ["log"]
+
+[dependencies]
+# Required for all the middleware types and utilities
+actix-web = "4.2"
+# Used for `actix_service::forward_ready!(service)` macro
+actix-service = "2.0"
+# Parses and serializes query strings
+qstring = "0.7"
+# Used for `LocalBoxFuture` type
+futures = "0.3"
+
+# Logging. Both are optional, and activated via their respective features.
+tracing = { version = "0.1", optional = true }
+log = { version = "0.4", optional = true }
+
+[dev-dependencies]
+# Read the logs during testing
+test-log = { version = "0.2", default-features = false, features = ["trace"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+  "env-filter",
+  "fmt",
+] }
