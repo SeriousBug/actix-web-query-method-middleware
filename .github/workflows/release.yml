@@ -23,6 +23,7 @@ jobs:
     needs: [tests]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
       - run: cargo publish --token ${CRATES_TOKEN}
         env:
           CRATES_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
