@@ -51,7 +51,6 @@
 //! # To disable logging entirely
 //! actix-web-query-method-middleware = { version = "1.0", default-features = false }
 //! ```
-//!
 use std::future::{ready, Ready};
 use std::rc::Rc;
 use std::str::FromStr;
@@ -86,6 +85,7 @@ impl Default for QueryMethod {
 
 impl QueryMethod {
     /// Create the middleware with the default settings.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -94,29 +94,32 @@ impl QueryMethod {
     /// you need to send your request like `/path?_method=POST` to use this
     /// middleware. If you happen to already use `_method` in your application,
     /// you can override the parameter name used here to pick something else.
+    #[must_use]
     pub fn parameter_name(&mut self, name: &str) -> Self {
         self.parameter_name = name.to_string();
-        self.to_owned()
+        self.clone()
     }
 
     /// Disabled by default. When enabled, the middleware will respond to
     /// non-POST requests by rejecting them with a 400 code response.
+    #[must_use]
     pub fn enable_strict_mode(&mut self) -> Self {
         self.strict_mode = true;
-        self.to_owned()
+        self.clone()
     }
 
     /// Disabled by default. When disabled, the middleware will allow non-POST
     /// requests that have
+    #[must_use]
     pub fn disable_strict_mode(&mut self) -> Self {
         self.strict_mode = false;
-        self.to_owned()
+        self.clone()
     }
 }
 
-impl<S: 'static, B> Transform<S, ServiceRequest> for QueryMethod
+impl<S, B> Transform<S, ServiceRequest> for QueryMethod
 where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     S::Future: 'static,
 {
     type Response = ServiceResponse<EitherBody<B>>;
@@ -128,7 +131,7 @@ where
     fn new_transform(&self, service: S) -> Self::Future {
         ready(Ok(QueryMethodMiddleware {
             service: Rc::new(service),
-            options: self.to_owned(),
+            options: self.clone(),
         }))
     }
 }
@@ -137,9 +140,19 @@ pub struct QueryMethodMiddleware<S> {
     options: QueryMethod,
 }
 
-impl<S: 'static, B> Service<ServiceRequest> for QueryMethodMiddleware<S>
+/// Drop a parameter from the query string, if any. Returns a new query string.
+fn query_string_drop(query: QString, drop: &str) -> QString {
+    QString::new(
+        query
+            .into_iter()
+            .filter(|(k, _)| k.ne(drop))
+            .collect::<Vec<(String, String)>>(),
+    )
+}
+
+impl<S, B> Service<ServiceRequest> for QueryMethodMiddleware<S>
 where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     S::Future: 'static,
 {
     type Response = ServiceResponse<EitherBody<B>>;
@@ -150,18 +163,17 @@ where
 
     fn call(&self, mut req: ServiceRequest) -> Self::Future {
         let uri = req.head().uri.clone();
-        let mut uri_parts = uri.clone().into_parts();
-        let (path, query_string) = uri_parts
-            .path_and_query
-            .map(|pq| {
+        let mut uri_parts = uri.into_parts();
+        let (path, query_string) = uri_parts.path_and_query.map_or_else(
+            || ("".to_string(), "".to_string()),
+            |pq| {
                 (
                     pq.path().to_string(),
                     pq.query()
-                        .map(|q| q.to_string())
-                        .unwrap_or_else(|| "".to_string()),
+                        .map_or_else(|| "".to_string(), ToString::to_string),
                 )
-            })
-            .unwrap_or_else(|| ("".to_string(), "".to_string()));
+            },
+        );
         let query = QString::from(query_string.as_str());
 
         if let Some(value) = query.clone().get(&self.options.parameter_name) {
@@ -177,55 +189,47 @@ where
                 );
                 #[cfg(feature = "logging_log")]
                 log::debug!("Rerouting request for {} to method {}", req.path(), value);
-                match Method::from_str(value) {
-                    Ok(new_method) => {
-                        req.head_mut().method = new_method;
-                        uri_parts.path_and_query = Some(
-                            PathAndQuery::from_str(&format!(
-                                "{}{}",
-                                path,
-                                QString::new(
-                                    query
-                                        .into_iter()
-                                        .filter(|(k, _)| k.ne(&self.options.parameter_name))
-                                        .collect::<Vec<(String, String)>>()
-                                )
-                            ))
-                            // This unwrap is safe, since the string we're
-                            // making the path an query out of is the path and
-                            // query the server had already parsed and accepted.
-                            // Our modification here should not break things,
-                            // and we test for it as well.
-                            .unwrap(),
-                        );
-                        // This unwrap is also safe since we're just
-                        // reconstructing the uri from it's own old parts.
-                        req.head_mut().uri = Uri::from_parts(uri_parts).unwrap();
-                    }
-                    Err(_) => {
-                        #[cfg(feature = "logging_tracing")]
-                        tracing::warn!(
-                            parameter_name = &self.options.parameter_name,
-                            parameter_value = value,
-                            path = req.path(),
-                            original_method = original_method.as_str(),
-                            "Received a bad method query parameter"
-                        );
-                        #[cfg(feature = "logging_log")]
-                        log::warn!(
-                            "Received a bad method query parameter {} for path {}",
-                            value,
-                            req.path(),
-                        );
-                        let value = value.to_string();
-                        return Box::pin(async move {
-                            let response = HttpResponse::BadRequest()
-                                .body(format!("Method query parameter value {} is bad", value))
-                                .map_into_right_body();
-                            let (request, _) = req.into_parts();
-                            Ok(ServiceResponse::new(request, response))
-                        });
-                    }
+                if let Ok(new_method) = Method::from_str(value) {
+                    req.head_mut().method = new_method;
+                    uri_parts.path_and_query = Some(
+                        PathAndQuery::from_str(&format!(
+                            "{}{}",
+                            path,
+                            query_string_drop(query, &self.options.parameter_name)
+                        ))
+                        // This unwrap is safe, since the string we're
+                        // making the path an query out of is the path and
+                        // query the server had already parsed and accepted.
+                        // Our modification here should not break things,
+                        // and we test for it as well.
+                        .unwrap(),
+                    );
+                    // This unwrap is also safe since we're just
+                    // reconstructing the uri from it's own old parts.
+                    req.head_mut().uri = Uri::from_parts(uri_parts).unwrap();
+                } else {
+                    #[cfg(feature = "logging_tracing")]
+                    tracing::warn!(
+                        parameter_name = &self.options.parameter_name,
+                        parameter_value = value,
+                        path = req.path(),
+                        original_method = original_method.as_str(),
+                        "Received a bad method query parameter"
+                    );
+                    #[cfg(feature = "logging_log")]
+                    log::warn!(
+                        "Received a bad method query parameter {} for path {}",
+                        value,
+                        req.path(),
+                    );
+                    let value = value.to_string();
+                    return Box::pin(async move {
+                        let response = HttpResponse::BadRequest()
+                            .body(format!("Method query parameter value {} is bad", value))
+                            .map_into_right_body();
+                        let (request, _) = req.into_parts();
+                        Ok(ServiceResponse::new(request, response))
+                    });
                 }
             } else {
                 #[cfg(feature = "logging_tracing")]
