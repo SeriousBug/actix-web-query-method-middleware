@@ -1,6 +1,6 @@
 [![Crates.io](https://img.shields.io/crates/v/actix-web-query-method-middleware)](https://crates.io/crates/actix-web-query-method-middleware)
 [![docs.rs](https://img.shields.io/docsrs/actix-web-query-method-middleware)](https://docs.rs/actix-web-query-method-middleware/latest/actix_web_query_method_middleware/)
-[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/SeriousBug/actix-web-query-method-middleware/tests?label=tests)](https://github.com/SeriousBug/actix-web-query-method-middleware/actions/workflows/test.yml)
+[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/SeriousBug/actix-web-query-method-middleware/test.yml?label=tests&branch=main)](https://github.com/SeriousBug/actix-web-query-method-middleware/actions/workflows/test.yml)
 [![Codecov](https://img.shields.io/codecov/c/github/SeriousBug/actix-web-query-method-middleware?color=green)](https://app.codecov.io/gh/SeriousBug/actix-web-query-method-middleware)
 
 An Actix Web middleware that allows you to reroute `POST` requests to other
