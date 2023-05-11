@@ -1,10 +1,9 @@
 [package]
 name = "actix-web-query-method-middleware"
 description = "An Actix Web middleware that allows you to reroute `POST` requests to other methods like `PUT` or `DELETE` using a query parameter."
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 license = "MIT"
-license-file = "LICENSE"
 readme = "Readme.md"
 repository = "https://github.com/SeriousBug/actix-web-query-method-middleware"
 exclude = [".github", ".vscode"]
@@ -19,7 +18,7 @@ logging_log = ["log"]
 
 [dependencies]
 # Required for all the middleware types and utilities
-actix-web = "4.2"
+actix-web = "4.3"
 # Used for `actix_service::forward_ready!(service)` macro
 actix-service = "2.0"
 # Parses and serializes query strings
