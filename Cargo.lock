@@ -187,7 +187,7 @@ dependencies = [
 
 [[package]]
 name = "actix-web-query-method-middleware"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "actix-service",
  "actix-web",
